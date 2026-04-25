@@ -42,10 +42,14 @@ function STATS = mylasso(X,S,STATS, i)
 % --------------------
 % Lasso model fits
 % --------------------
-norms = STATS.normsSt;
-XS = STATS.XSt;
-
 w_size = size(S,2);
+% STATS.XSt and STATS.normsSt are preallocated to num_subsamples; the
+% selection loop has only filled the first w_size entries, so slice to
+% the valid prefix before passing to the coordinate-descent kernel
+% (which asserts size(X,2) == length(w)).
+norms = STATS.normsSt(1:w_size);
+XS = STATS.XSt(:, 1:w_size);
+
 w_vec = STATS.W(1:w_size,i);
 % w_vec is a dense column vector of
 % sum(S==1) by 1

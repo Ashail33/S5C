@@ -66,7 +66,8 @@ else
     end
 end
 
-S_t = []; % S_t is a set of indices of subsamples at t-th iteration
+S_t = zeros(1, num_subsamples); % preallocated; truncated after the loop
+num_St = 0;
 
 norms = ones(1,size(X,1)) * (X.^2);
 stats = struct (...
@@ -74,8 +75,8 @@ stats = struct (...
     'Lambda', lambda,...
     'time_for_CD',0,...
     'time_for_fit',0,...
-    'normsSt', [] ,...
-    'XSt', [] ,...
+    'normsSt', zeros(1, num_subsamples) ,...
+    'XSt', zeros(m, num_subsamples) ,...
     'W', zeros(num_subsamples,n),... % C_St
     'R', X ) ; % R = X - XC
 
@@ -85,35 +86,39 @@ for t = 1:max_t
   
     I_t = rand_idx((t-1)*num_I_t+1:t*num_I_t);
     
-    if(size(S_t,2) ~= 0)      
+    if(num_St ~= 0)
+      S_t_active = S_t(1:num_St);
       for i=I_t
-        stats = mylasso(X, S_t, stats, i);
+        stats = mylasso(X, S_t_active, stats, i);
       end
     end
-    
-    candidate = setdiff(1:n, S_t);
 
-    grad_L = (stats.R(:,I_t))'* X(:, candidate);
-    grad = zeros(num_I_t, n);    
-    grad(:, candidate) = min(grad_L+lambda, max(0, grad_L-lambda));
-    
-    for j=1:num_I_t
-      grad(j, I_t(j)) = 0;
+    % Soft-thresholded gradient over all columns at once. Then mask out
+    % indices already in S_t and the queried indices I_t so they cannot be
+    % selected.
+    grad_L = (stats.R(:,I_t))' * X;
+    grad = min(grad_L+lambda, max(0, grad_L-lambda));
+    if(num_St ~= 0)
+      grad(:, S_t(1:num_St)) = 0;
     end
+    grad(:, I_t) = 0;
 
-    [max_vals, idx] = sort(sum(grad.^2,1),'descend');
+    [max_val, dSt] = max(sum(grad.^2,1));
 
-
-    if( max_vals(1) ~= 0)
-      dSt = idx(1);     % dSt is i' in the paper
-      S_t = [S_t dSt];
-      stats.normsSt = [stats.normsSt norms(dSt)];
-      stats.XSt = [stats.XSt X(:,dSt)];
-      if(size(S_t,2) == num_subsamples)
+    if( max_val ~= 0)
+      num_St = num_St + 1;
+      S_t(num_St) = dSt;     % dSt is i' in the paper
+      stats.normsSt(num_St) = norms(dSt);
+      stats.XSt(:, num_St) = X(:, dSt);
+      if(num_St == num_subsamples)
 	break
-      end    
-    end  
+      end
+    end
 end
+% trim preallocated buffers to the number of samples actually selected
+S_t = S_t(1:num_St);
+stats.normsSt = stats.normsSt(1:num_St);
+stats.XSt = stats.XSt(:, 1:num_St);
 selectiontime = toc(selectiontic);
 
 %% solve all lasso with final S_t
@@ -125,7 +130,6 @@ lassotime = toc(lassotic);
 
 %% put C into sparse matrix format
 settic = tic;
-num_St = size(S_t, 2);
 row_idx = repmat( S_t, 1, n);
 col_idx = repmat( 1:n, num_St, 1);
 C = sparse( row_idx, col_idx, stats.W(1:num_St,:), n, n);
