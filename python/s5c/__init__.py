@@ -9,6 +9,7 @@ from .clustering_error import clustering_error
 from .representation_learning import representation_learning_s5c
 from .run_s5c import run_s5c
 from .spectral_clustering import orth_iter, spectral_clustering_s5c
+from .spectral_clustering_qubo import spectral_clustering_qubo
 
 __all__ = [
     "clustering_error",
@@ -16,4 +17,5 @@ __all__ = [
     "representation_learning_s5c",
     "run_s5c",
     "spectral_clustering_s5c",
+    "spectral_clustering_qubo",
 ]

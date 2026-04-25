@@ -2,3 +2,10 @@ numpy>=1.22
 scipy>=1.8
 scikit-learn>=1.1
 numba>=0.56
+
+# Optional: quantum-annealing-style spectral clustering backend.
+# Required only if you import s5c.spectral_clustering_qubo.
+dimod>=0.12
+dwave-samplers>=1.0
+# For real D-Wave hardware (use_dwave=True):
+# dwave-system>=1.20
