@@ -1,0 +1,6 @@
+gensim>=4.3
+scikit-learn>=1.1
+numpy>=1.22
+requests>=2.28
+tqdm>=4.65
+matplotlib>=3.6

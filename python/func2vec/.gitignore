@@ -1,0 +1,6 @@
+data/raw/
+data/sequences.jsonl
+data/manifest.jsonl
+models/
+logs/
+*.tsv
