@@ -21,9 +21,9 @@ MODELS = ROOT / "models"
 SEQ = DATA / "sequences.jsonl"
 
 
-def iter_sequences() -> list[list[str]]:
+def iter_sequences(path: Path) -> list[list[str]]:
     seqs: list[list[str]] = []
-    with SEQ.open() as f:
+    with path.open() as f:
         for line in f:
             try:
                 seqs.append(json.loads(line)["seq"])
@@ -40,12 +40,15 @@ def main() -> None:
     ap.add_argument("--epochs", type=int, default=15)
     ap.add_argument("--sg", type=int, default=1, help="1=skip-gram, 0=CBOW")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--input", default=str(SEQ), help="path to sequences .jsonl (default: data/sequences.jsonl)")
+    ap.add_argument("--out-name", default="func2vec", help="base name for saved model files (models/<name>.model, vectors_<name>.tsv)")
     args = ap.parse_args()
 
     MODELS.mkdir(parents=True, exist_ok=True)
-    sequences = iter_sequences()
+    seq_path = Path(args.input)
+    sequences = iter_sequences(seq_path)
     if not sequences:
-        raise SystemExit(f"No sequences found at {SEQ}. Run scrape.py then extract.py first.")
+        raise SystemExit(f"No sequences found at {seq_path}. Run scrape.py then extract.py first.")
 
     counts = Counter(tok for seq in sequences for tok in seq)
     print(f"[train] sequences={len(sequences)} raw-vocab={len(counts)} min-count={args.min_count}")
@@ -59,12 +62,14 @@ def main() -> None:
         workers=args.workers,
         epochs=args.epochs,
     )
-    model.save(str(MODELS / "func2vec.model"))
-    print(f"[train] wrote {MODELS / 'func2vec.model'} (vocab={len(model.wv)})")
+    model_path = MODELS / f"{args.out_name}.model"
+    model.save(str(model_path))
+    print(f"[train] wrote {model_path} (vocab={len(model.wv)})")
 
     # projector-friendly export
-    vec_path = MODELS / "vectors.tsv"
-    meta_path = MODELS / "metadata.tsv"
+    suffix = "" if args.out_name == "func2vec" else f"_{args.out_name}"
+    vec_path = MODELS / f"vectors{suffix}.tsv"
+    meta_path = MODELS / f"metadata{suffix}.tsv"
     with vec_path.open("w") as vf, meta_path.open("w") as mf:
         mf.write("word\tcount\ttop_module\n")
         for word in model.wv.index_to_key:

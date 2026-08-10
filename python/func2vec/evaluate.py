@@ -128,9 +128,10 @@ def main() -> None:
     ap.add_argument("--anchors", nargs="*", default=None)
     ap.add_argument("--topn", type=int, default=8)
     ap.add_argument("--no-tsne", action="store_true")
+    ap.add_argument("--model", default="func2vec", help="which model file under models/ to load (default: func2vec)")
     args = ap.parse_args()
 
-    model = Word2Vec.load(str(MODELS / "func2vec.model"))
+    model = Word2Vec.load(str(MODELS / f"{args.model}.model"))
     anchors = args.anchors or DEFAULT_ANCHORS
     neighbors(model, anchors, topn=args.topn)
     task_silhouette(model)

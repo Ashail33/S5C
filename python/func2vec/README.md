@@ -47,8 +47,21 @@ Each sequence is auto-tagged with task labels (`clustering`, `classification`, `
 
 ## Demo runs
 
-- **`demo/DEMO.md` (v1)** — first end-to-end run on 1820 files / 1400-token vocab. Established that the pipeline works and surfaced a corpus-contamination problem: user scripts importing `sklearn.utils.estimator_checks._*` polluted the neighborhood of every estimator.
-- **`demo/DEMO_v2.md` (current)** — same 2140 raw files, extractor-only changes: repo blocklist, token stopword filter, and lightweight variable→class tracking so `km.fit(X)` resolves to `sklearn.cluster.KMeans.fit`. Vocabulary grew 1400 → 1668 (+268 method tokens) and the previously-broken seeds (`LogisticRegression`, `PCA`) now return their own `.fit`/`.predict`/`.transform`/`.get_params` methods as top neighbors. Chain synthesis reads like a real script: `XGBClassifier → .fit → .get_booster → .predict → .score → .predict_proba → .load_model`.
+- **`demo/DEMO.md` (v1)** — first end-to-end run on 1820 files / 1400-token vocab. Established that the pipeline works and surfaced a corpus-contamination problem.
+- **`demo/DEMO_v2.md`** — repo blocklist, token stopword filter, and variable→class tracking so `km.fit(X)` resolves to `sklearn.cluster.KMeans.fit`. Vocab 1400 → 1668. Chains started reading like real workflows.
+- **`demo/DEMO_v3.md` (current)** — algorithms decomposed into their internal-call substrate via `inspect.getsource` on installed libraries (`decompose.py`), then those components injected into the corpus as `COMP:*` tokens (`augment.py`) and retrained. Vocab 1668 → 2038 (~370 new component tokens). Produces a **second lens** on the same vocabulary: v2 answers "what algorithm typically follows X?" (usage similarity), v3 answers "what algorithm shares implementation substrate with X?" (implementation similarity). E.g. `MiniBatchKMeans` gets pulled toward `KMeans` because they share `_kmeans_plusplus`/`_labels_inertia`; `LGBMClassifier` gets pulled away from `XGBClassifier` because their internals are entirely separate codebases even though scripts use them interchangeably.
+
+## Pipeline (v3)
+
+```
+scrape.py     →  data/raw/*.py + data/manifest.jsonl
+extract.py    →  data/sequences.jsonl (call sequences per file, w/ method tracking)
+decompose.py  →  data/decomposition.jsonl (class → internal components, DF-filtered)
+augment.py    →  data/sequences_aug.jsonl (splice + definition sentences)
+train.py      →  models/func2vec_v3.model (train --input --out-name to pick corpus/model)
+evaluate.py   →  neighbors + task-tag silhouette + t-SNE (--model to pick model)
+chain.py      →  greedy pipeline synthesis (--model to pick model; skips COMP: tokens)
+```
 
 ## Files
 

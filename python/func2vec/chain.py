@@ -48,6 +48,8 @@ def chain(model: Word2Vec, seeds: list[str], steps: int, same_module: bool, k_ca
             tok = model.wv.index_to_key[idx]
             if tok in chosen or tok in STOPWORDS:
                 continue
+            if tok.startswith("COMP:"):
+                continue
             if same_module and tok.split(".")[0] != top_module:
                 continue
             pick = (tok, float(sims[idx]))
@@ -64,9 +66,10 @@ def main() -> None:
     ap.add_argument("--seed", nargs="+", required=True, help="one or more seed function names")
     ap.add_argument("--steps", type=int, default=5)
     ap.add_argument("--any-module", action="store_true", help="allow crossing top-level modules")
+    ap.add_argument("--model", default="func2vec", help="which model file under models/ to load")
     args = ap.parse_args()
 
-    model = Word2Vec.load(str(MODELS / "func2vec.model"))
+    model = Word2Vec.load(str(MODELS / f"{args.model}.model"))
     picks = chain(model, args.seed, steps=args.steps, same_module=not args.any_module)
     print("seed: " + " → ".join(args.seed))
     for tok, sc in picks:
