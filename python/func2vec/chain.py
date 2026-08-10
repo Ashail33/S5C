@@ -48,7 +48,7 @@ def chain(model: Word2Vec, seeds: list[str], steps: int, same_module: bool, k_ca
             tok = model.wv.index_to_key[idx]
             if tok in chosen or tok in STOPWORDS:
                 continue
-            if tok.startswith("COMP:"):
+            if tok.startswith("COMP:") or tok.startswith("MATH:"):
                 continue
             if same_module and tok.split(".")[0] != top_module:
                 continue

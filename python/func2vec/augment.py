@@ -31,19 +31,32 @@ ROOT = Path(__file__).parent
 DATA = ROOT / "data"
 SEQ = DATA / "sequences.jsonl"
 DECOMP = DATA / "decomposition.jsonl"
+MATH_DECOMP = DATA / "math_decomposition.jsonl"
 OUT = DATA / "sequences_aug.jsonl"
 
 COMP_PREFIX = "COMP:"
 
 
 def load_decomposition(top: int) -> dict[str, list[str]]:
-    if not DECOMP.exists():
-        raise SystemExit(f"missing {DECOMP} — run decompose.py first")
+    """Merge framework-internal components (COMP:) and math substrate (MATH:).
+    Math tokens are pre-prefixed inside math_decomposition.jsonl."""
     out: dict[str, list[str]] = {}
-    with DECOMP.open() as f:
-        for line in f:
-            r = json.loads(line)
-            out[r["class"]] = [f"{COMP_PREFIX}{c}" for c in r["components"][:top]]
+    if DECOMP.exists():
+        with DECOMP.open() as f:
+            for line in f:
+                r = json.loads(line)
+                out[r["class"]] = [f"{COMP_PREFIX}{c}" for c in r["components"][:top]]
+    if MATH_DECOMP.exists():
+        with MATH_DECOMP.open() as f:
+            for line in f:
+                r = json.loads(line)
+                math_tokens = r["math"][:top]  # already prefixed MATH:
+                if r["class"] in out:
+                    out[r["class"]].extend(math_tokens)
+                else:
+                    out[r["class"]] = list(math_tokens)
+    if not out:
+        raise SystemExit(f"missing {DECOMP} or {MATH_DECOMP} — run decompose.py / math_decompose.py first")
     return out
 
 

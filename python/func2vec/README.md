@@ -49,18 +49,28 @@ Each sequence is auto-tagged with task labels (`clustering`, `classification`, `
 
 - **`demo/DEMO.md` (v1)** — first end-to-end run on 1820 files / 1400-token vocab. Established that the pipeline works and surfaced a corpus-contamination problem.
 - **`demo/DEMO_v2.md`** — repo blocklist, token stopword filter, and variable→class tracking so `km.fit(X)` resolves to `sklearn.cluster.KMeans.fit`. Vocab 1400 → 1668. Chains started reading like real workflows.
-- **`demo/DEMO_v3.md` (current)** — algorithms decomposed into their internal-call substrate via `inspect.getsource` on installed libraries (`decompose.py`), then those components injected into the corpus as `COMP:*` tokens (`augment.py`) and retrained. Vocab 1668 → 2038 (~370 new component tokens). Produces a **second lens** on the same vocabulary: v2 answers "what algorithm typically follows X?" (usage similarity), v3 answers "what algorithm shares implementation substrate with X?" (implementation similarity). E.g. `MiniBatchKMeans` gets pulled toward `KMeans` because they share `_kmeans_plusplus`/`_labels_inertia`; `LGBMClassifier` gets pulled away from `XGBClassifier` because their internals are entirely separate codebases even though scripts use them interchangeably.
+- **`demo/DEMO_v3.md`** — algorithms decomposed into their internal-call substrate via `inspect.getsource` (`decompose.py`), components injected as `COMP:*` tokens (`augment.py`). Produces a second lens: v2 = usage similarity, v3 = implementation similarity.
+- **`demo/DEMO_v4.md` (current)** — adds (a) math-level decomposition (`math_decompose.py`) that resolves each internal call through the defining module's `__dict__` to keep only calls into numpy/scipy/math, and walks module-level helpers so `_kmeans_plusplus`-style hot loops get counted; (b) `generate_cluster.py`, a runnable code generator that heuristic-picks the clustering algorithm from flags, uses the embedding to rank preprocessing and metric companions from a small whitelist, and uses `inspect.signature` to emit kwargs the installed library actually accepts. Four scripts generated + three executed cleanly in this session (`demo/generated/`).
 
-## Pipeline (v3)
+## Pipeline (v4)
 
 ```
-scrape.py     →  data/raw/*.py + data/manifest.jsonl
-extract.py    →  data/sequences.jsonl (call sequences per file, w/ method tracking)
-decompose.py  →  data/decomposition.jsonl (class → internal components, DF-filtered)
-augment.py    →  data/sequences_aug.jsonl (splice + definition sentences)
-train.py      →  models/func2vec_v3.model (train --input --out-name to pick corpus/model)
-evaluate.py   →  neighbors + task-tag silhouette + t-SNE (--model to pick model)
-chain.py      →  greedy pipeline synthesis (--model to pick model; skips COMP: tokens)
+scrape.py           →  data/raw/*.py + data/manifest.jsonl
+extract.py          →  data/sequences.jsonl (call sequences, method tracking)
+decompose.py        →  data/decomposition.jsonl (framework-internal components, DF-filtered)
+math_decompose.py   →  data/math_decomposition.jsonl (numpy/scipy math substrate)
+augment.py          →  data/sequences_aug.jsonl (splice + definition sentences)
+train.py            →  models/func2vec_v4.model (--input --out-name select corpus/model)
+evaluate.py         →  neighbors + task-tag silhouette + t-SNE (--model)
+chain.py            →  greedy pipeline synthesis (--model; skips COMP:/MATH: tokens)
+generate_cluster.py →  runnable clustering script (algorithm=rules, companions=embedding, params=inspect)
+```
+
+## Try the generator
+
+```bash
+python -m func2vec.generate_cluster --k 5 --dataset-size large --scale --pca 5 --output out.py
+python out.py
 ```
 
 ## Files
