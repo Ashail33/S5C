@@ -125,19 +125,27 @@ def search_code(query: str, page: int, per_page: int = 100) -> list[dict]:
 
 
 def fetch_raw(repo: str, path: str, sha: str) -> str | None:
-    """Fetch a file at a specific commit via raw.githubusercontent.com (no auth needed for public)."""
-    url = f"{RAW_GH}/{repo}/{sha}/{path}"
-    for attempt in range(3):
-        try:
-            r = requests.get(url, timeout=30)
-        except requests.RequestException:
-            time.sleep(2 ** attempt)
-            continue
-        if r.status_code == 200:
-            return r.text
-        if r.status_code == 404:
-            return None
-        time.sleep(2 ** attempt)
+    """Fetch a file via raw.githubusercontent.com (public files, no auth).
+
+    Code search returns a *blob* sha, which raw.githubusercontent.com does not
+    accept as a ref. We fall back to HEAD (the default branch), which loses
+    exact reproducibility but works for the vast majority of repos. If that's a
+    404 (renamed branch, moved file, etc.) we try 'main' and 'master' explicitly.
+    """
+    refs = ["HEAD", "main", "master"]
+    for ref in refs:
+        url = f"{RAW_GH}/{repo}/{ref}/{path}"
+        for attempt in range(2):
+            try:
+                r = requests.get(url, timeout=15)
+            except requests.RequestException:
+                time.sleep(1 + attempt)
+                continue
+            if r.status_code == 200:
+                return r.text
+            if r.status_code == 404:
+                break  # try next ref
+            time.sleep(1 + attempt)
     return None
 
 
@@ -180,14 +188,18 @@ def save_one(repo: str, path: str, sha: str, content: str, query: str) -> None:
     )
 
 
-def scrape_from_hits(max_bytes: int) -> int:
-    """Mode A: consume data/hits.jsonl, fetch each via raw."""
+def scrape_from_hits(max_bytes: int, workers: int = 20) -> int:
+    """Mode A: consume data/hits.jsonl, fetch each via raw with a thread pool."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from threading import Lock
+
     if not HITS.exists():
         print(f"[scrape] no hits file at {HITS}", file=sys.stderr)
         return 0
     RAW.mkdir(parents=True, exist_ok=True)
     seen = load_seen_shas()
-    saved = 0
+
+    todo: list[dict] = []
     total = 0
     with HITS.open() as f:
         for line in f:
@@ -197,22 +209,36 @@ def scrape_from_hits(max_bytes: int) -> int:
             except Exception:
                 continue
             sha = hit.get("sha")
-            repo = hit.get("repo")
-            path = hit.get("path")
-            query = hit.get("query", "")
-            if not (sha and repo and path) or sha in seen:
+            if not (sha and hit.get("repo") and hit.get("path")):
+                continue
+            if sha in seen:
                 continue
             seen.add(sha)
-            content = fetch_raw(repo, path, sha)
-            if content is None:
-                continue
-            if len(content) > max_bytes or len(content) < 40:
-                continue
-            save_one(repo, path, sha, content, query)
-            saved += 1
-            if saved % 50 == 0:
-                print(f"[scrape] saved={saved} seen={len(seen)} scanned={total}", file=sys.stderr)
-    print(f"[scrape] done from-hits. saved={saved} scanned={total}")
+            todo.append(hit)
+
+    saved = 0
+    lock = Lock()
+
+    def _do(hit: dict) -> bool:
+        content = fetch_raw(hit["repo"], hit["path"], hit["sha"])
+        if content is None or len(content) > max_bytes or len(content) < 40:
+            return False
+        with lock:
+            save_one(hit["repo"], hit["path"], hit["sha"], content, hit.get("query", ""))
+        return True
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = [ex.submit(_do, h) for h in todo]
+        for i, fut in enumerate(as_completed(futures), 1):
+            try:
+                if fut.result():
+                    saved += 1
+            except Exception:
+                pass
+            if i % 200 == 0:
+                print(f"[scrape] progress={i}/{len(todo)} saved={saved}", file=sys.stderr)
+
+    print(f"[scrape] done from-hits. saved={saved} scanned={total} todo={len(todo)}")
     return saved
 
 
