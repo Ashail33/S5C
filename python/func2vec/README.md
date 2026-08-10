@@ -45,6 +45,12 @@ Each sequence is auto-tagged with task labels (`clustering`, `classification`, `
 
 **Chaining.** `chain.py` seeds the embedding with one or more known functions, forms a context vector as their mean, and greedily picks the highest-cosine candidate that (a) isn't already in the chain and (b) isn't in a stopword list of generic constructors (`numpy.array`, `pandas.DataFrame`, ...). By default it stays within the seed's top-level module, since crossing modules mid-pipeline usually indicates a poor suggestion; `--any-module` lifts that constraint.
 
+## Demo run
+
+`demo/DEMO.md` contains a full end-to-end run on a 1820-file / 1400-token corpus scraped from GitHub. Highlights: `sklearn.cluster.KMeans` chains into a perfect cluster-evaluation pipeline (`silhouette_score` → `davies_bouldin_score` → `silhouette_samples` → …), `torch.nn.Conv2d`'s nearest neighbors are all 2D CNN blocks at ≥0.93 cosine, and `xgboost.XGBClassifier` finds `lightgbm.LGBMClassifier` as its nearest cross-library neighbor without ever being told they're substitutes.
+
+The demo also documents a **corpus contamination finding** — scraping sklearn's own repo pollutes the embedding neighborhood of every estimator with `sklearn.utils.estimator_checks._*` tokens (which co-occur with every estimator inside sklearn's test suite). Two mitigations noted for next iteration.
+
 ## Files
 
 - `scrape.py` — corpus collection (two modes: MCP-fed hits or direct code-search)
